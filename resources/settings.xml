@@ -1,0 +1,9 @@
+<settings>
+    <category label="Allgemein">
+        <setting label="Livestream Bitrate" type="select" id="livestreambitrate" default="192kbit/s MP3"
+  		values="72kbit/s AAC|128kbit/s MP3|192kbit/s MP3|256kbit/s OGG Opus" />
+    </category>
+    <category label="Debugging">
+        <setting label="Debug-Mitteilungen aktivieren" type="bool" id="debugnotify" default="true"/>
+    </category>
+</settings>

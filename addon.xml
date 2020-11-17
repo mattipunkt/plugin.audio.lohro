@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<addon id="plugin.audio.lohro"
+version="0.0.1"
+name="Radio LOHRO 90.2"
+provider-name="mattipunkt">
+<requires>
+  <import addon="xbmc.python" version="2.14.0"/>
+  <import addon="script.module.kodi-six" />
+</requires>
+<extension point="xbmc.python.pluginsource" library="main.py">
+  <provides>audio</provides>
+</extension>
+<extension point="xbmc.addon.metadata">
+  <summary lang="de">Freies Radio aus der Hansestadt Rostock</summary>
+  <description lang="de_de">Dieses Addon kann mehrere Inhalte von LOHRO wiedergeben. Darunter die Beiträge aus der LOHROthek und den Livestream.</description>
+  <disclaimer lang="de_de">Alle Streams und Audios werden von der offiziellen Seite abgespielt.</disclaimer>
+  <assets>
+    <icon>/resources/images/icon.png</icon>
+    <fanart>/resources/images/fanart.jpg</fanart>
+    <!--
+    <screenshot>resources\screenshot-01.jpg</screenshot>
+    <screenshot>resources\screenshot-02.jpg</screenshot>
+    <screenshot>resources\screenshot-03.jpg</screenshot>  -->  
+  </assets>
+  <news>Hallo Welt! Ein neues Addon wurde geboren.</news>
+</extension>
+</addon>

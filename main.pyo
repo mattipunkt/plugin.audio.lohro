@@ -1,0 +1,256 @@
+# -*- coding: utf-8 -*-
+import sys, os
+import urllib
+from urllib import urlencode
+from urlparse import parse_qsl
+import urlparse
+import xbmcgui
+import xbmcplugin
+import xbmcaddon
+import json
+# Python3-Kompatibilität:
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from kodi_six import xbmc, xbmcaddon, xbmcplugin, xbmcgui, xbmcvfs
+# o. Auswirkung auf die unicode-Strings in PYTHON3:
+from kodi_six.utils import py2_encode, py2_decode
+
+import os, sys, subprocess
+PYTHON2 = sys.version_info.major == 2
+PYTHON3 = sys.version_info.major == 3
+if PYTHON2:					
+	from urllib import quote, unquote, quote_plus, unquote_plus, urlencode, urlretrieve 
+	from urllib2 import Request, urlopen, URLError 
+	from urlparse import urljoin, urlparse, urlunparse , urlsplit, parse_qs
+	LOG_MSG = xbmc.LOGNOTICE 				# s. PLog
+elif PYTHON3:				
+	from urllib.parse import quote, unquote, quote_plus, unquote_plus, urlencode, urljoin, urlparse, urlunparse, urlsplit, parse_qs  
+	from urllib.request import Request, urlopen, urlretrieve
+	from urllib.error import URLError
+	LOG_MSG = xbmc.LOGINFO 					# s. PLog
+	try:									# https://github.com/xbmc/xbmc/pull/18345 (Matrix 19.0-alpha 2)
+		xbmc.translatePath = xbmcvfs.translatePath
+	except:
+		pass
+
+PYTHON2 = sys.version_info.major == 2	# Stammhalter Pythonversion 
+PYTHON3 = sys.version_info.major == 3
+
+NAME			= 'Radio LOHRO 90.2'
+KODI_VERSION 	= xbmc.getInfoLabel('System.BuildVersion')
+
+PLUGIN_URL 		= sys.argv[0]				# plugin://plugin.video.ardundzdf/
+HANDLE			= int(sys.argv[1])
+
+ADDON_ID      	= 'plugin.audio.lohro'
+SETTINGS 		= xbmcaddon.Addon(id=ADDON_ID)
+ADDON_PATH    	= SETTINGS.getAddonInfo('path')	# Basis-Pfad Addon
+
+def PLog(msg, loglevel=xbmc.LOGDEBUG):
+#	if DEBUG == 'false':
+#		return
+	if isinstance(msg, str):		# entf. mit six
+		msg = msg.encode('utf-8')
+	loglevel = xbmc.LOGNOTICE
+	# PLog('loglevel: ' + str(loglevel))
+	if loglevel >= 2:
+		xbmc.log("%s --> %s" % ('mattipunkt', msg), level=loglevel)
+
+
+def R(fname, abs_path=False):
+	PLog('R(fname): %s' % fname); # PLog(abs_path)
+	# PLog("ADDON_PATH: " + ADDON_PATH)
+	if abs_path:
+		try:
+			# fname = '%s/resources/%s' % (PluginAbsPath, fname)
+			path = os.path.join(ADDON_PATH,fname)
+			return path
+		except Exception as exception:
+			PLog(str(exception))
+	else:
+		if fname.endswith('png'):	# Icons im Unterordner images
+			fname = '%s/resources/images/%s' % (ADDON_PATH, fname)
+			fname = os.path.abspath(fname)
+			# PLog("fname: " + fname)
+			return os.path.join(fname)
+		else:
+			fname = "%s/resources/%s" % (ADDON_NAME, fname)
+			fname = os.path.abspath(fname)
+			return fname
+
+def addDir(li, label, action, dirID, fanart, thumb, fparams, summary='', tagline='', mediatype='',\
+		cmenu=True, sortlabel='', merkname='', filterstatus='', start_end=''):
+	PLog('addDir:');
+	PLog(type(label))
+	label_org=label				# s. 'Job löschen' in K-Menüs
+	label=py2_encode(label)
+	PLog('addDir_label: {0}, action: {1}, dirID: {2}'.format(label[:100], action, dirID))
+	PLog(mediatype);
+	action=py2_encode(action); dirID=py2_encode(dirID); 
+	summary=py2_encode(summary); tagline=py2_encode(tagline); 
+	fparams=py2_encode(fparams); fanart=py2_encode(fanart); thumb=py2_encode(thumb);
+	merkname=py2_encode(merkname); start_end=py2_encode(start_end);
+	PLog('addDir_summary: {0}, tagline: {1}, mediatype: {2}, cmenu: {3}'.format(summary[:80], tagline[:80], mediatype, cmenu))
+
+		
+	li.setLabel(label)			# Kodi Benutzeroberfläche: Arial-basiert für arabic-Font erf.
+	# PLog('summary, tagline: {0}, {1}'.format(summary, tagline))
+	Plot = ''
+	if tagline:								
+		Plot = tagline
+	if summary:	
+		Plot = Plot +"\n\n" + summary
+	
+	if mediatype == 'music': 	# "video", "music" setzen: List- statt Dir-Symbol
+		li.setInfo(type="music", infoLabels={"Title": label, "Plot": Plot, "mediatype": "music"})	
+		isFolder = False		# nicht bei direktem Player-Aufruf - OK mit setResolvedUrl
+		li.setProperty('IsPlayable', 'true')					
+	else:
+		li.setInfo(type="music", infoLabels={"Title": label, "Plot": Plot})	
+		li.setProperty('IsPlayable', 'false')
+		isFolder = True	
+
+	li.setArt({'thumb':thumb, 'icon':thumb, 'fanart':fanart})
+	if sortlabel:
+		# kein Unterschied zw. SORT_METHOD_LABEL / SORT_METHOD_LABEL_IGNORE_THE
+		xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_LABEL)
+	else:
+		xbmcplugin.addSortMethod(HANDLE, xbmcplugin.SORT_METHOD_UNSORTED)
+	PLog('PLUGIN_URL: ' + PLUGIN_URL)	# plugin://plugin.audio.lohro/
+	PLog('HANDLE: %s' % HANDLE)
+	
+	PLog("fparams: " + unquote(fparams)[:200] + "..")
+	if thumb == None:
+		thumb = ''
+		
+	add_url = PLUGIN_URL+"?action="+action+"&dirID="+dirID+"&fanart="+fanart+"&thumb="+thumb+quote(fparams)
+	PLog("addDir_url: " + unquote(add_url)[:200])		
+
+
+ICON_BLANK = R('blank.png')
+ICON_LOHRO = R('icon.png')
+base_url = sys.argv[0]
+addon_handle = int(sys.argv[1])
+args = urlparse.parse_qs(sys.argv[2][1:])
+
+series_url = 'https://produktion.lohro.de/api/v1/series?format=json'
+
+xbmcplugin.setContent(addon_handle, 'music')
+
+def build_url(query):
+    return base_url + '?' + urllib.urlencode(query)
+
+mode = args.get('mode', None)
+
+# LIVESTREAM BITRATE 192kb/s 
+if SETTINGS.getSetting('livestreambitrate') == '192':
+    if mode is None:
+    	liveurl = 'http://stream.lohro.de:8000/lohro.mp3.m3u'
+    	li = xbmcgui.ListItem('Livestream (192kbit/s, MP3)', thumbnailImage=ICON_LOHRO)
+    	xbmcplugin.addDirectoryItem(handle=addon_handle, url=liveurl, listitem=li)
+
+    	url = build_url({'mode': 'folder', 'foldername': 'Sendungen'})
+    	li = xbmcgui.ListItem('Sendungen', thumbnailImage=ICON_BLANK)
+    	xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li, isFolder=True)
+
+    	url = build_url({'mode': 'folder', 'foldername': 'Neuste Beiträge'})
+    	li = xbmcgui.ListItem('Neuste Beiträge', thumbnailImage=ICON_BLANK)
+    	xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li, isFolder=True)
+
+    	xbmcplugin.endOfDirectory(addon_handle)
+
+	# elif nicht verschachtelt verwenden, None ausschließen:
+	if mode is not None:
+		if mode[0] == 'folder':
+			foldername = args['foldername'][0]
+			url = 'http://localhost/some_video.mkv'
+			li = xbmcgui.ListItem(foldername + ' Audio', iconImage='icon.png')
+			xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li)
+			xbmcplugin.endOfDirectory(addon_handle)
+			foldername = args['foldername'][0]
+			url = 'http://localhost/some_video.mkv'
+			li = xbmcgui.ListItem(foldername + ' Audio', iconImage='icon.png')
+			xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li)
+			xbmcplugin.endOfDirectory(addon_handle)
+
+
+# LIVESTREAM BITRATE 72 kb/s
+if SETTINGS.getSetting('livestreambitrate') == '72':
+    if mode is None:
+    	liveurl = 'http://stream.lohro.de:8000/lohro.aac.m3u'
+    	li = xbmcgui.ListItem('Livestream (72kbit/s, AAC)', thumbnailImage=ICON_LOHRO)
+    	xbmcplugin.addDirectoryItem(handle=addon_handle, url=liveurl, listitem=li)
+
+    	url = build_url({'mode': 'folder', 'foldername': 'Sendungen'})
+    	li = xbmcgui.ListItem('Sendungen', thumbnailImage=ICON_BLANK)
+    	xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li, isFolder=True)
+
+    	url = build_url({'mode': 'folder', 'foldername': 'Neuste Beiträge'})
+    	li = xbmcgui.ListItem('Neuste Beiträge', thumbnailImage=ICON_BLANK)
+    	xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li, isFolder=True)
+
+    	xbmcplugin.endOfDirectory(addon_handle)
+
+	# elif nicht verschachtelt verwenden, None ausschließen:
+	if mode is not None:
+		if mode[0] == 'folder':
+			foldername = args['foldername'][0]
+			url = 'http://localhost/some_video.mkv'
+			li = xbmcgui.ListItem(foldername + ' Audio', iconImage='icon.png')
+			xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li)
+			xbmcplugin.endOfDirectory(addon_handle)
+
+# LIVESTREAM BITRATE 128kbit/s
+if SETTINGS.getSetting('livestreambitrate') == '128':
+    if mode is None:
+    	liveurl = 'http://stream.lohro.de:8000/lohro_low.mp3.m3u'
+    	li = xbmcgui.ListItem('Livestream (128kbit/s, MP3)', thumbnailImage=ICON_LOHRO)
+    	xbmcplugin.addDirectoryItem(handle=addon_handle, url=liveurl, listitem=li)
+
+    	url = build_url({'mode': 'folder', 'foldername': 'Sendungen'})
+    	li = xbmcgui.ListItem('Sendungen', thumbnailImage=ICON_BLANK)
+    	xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li, isFolder=True)
+
+    	url = build_url({'mode': 'folder', 'foldername': 'Neuste Beiträge'})
+    	li = xbmcgui.ListItem('Neuste Beiträge', thumbnailImage=ICON_BLANK)
+    	xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li, isFolder=True)
+
+    	xbmcplugin.endOfDirectory(addon_handle)
+
+	# elif nicht verschachtelt verwenden, None ausschließen:
+	if mode is not None:
+		if mode[0] == 'folder':
+			foldername = args['foldername'][0]
+			url = 'http://localhost/some_video.mkv'
+			li = xbmcgui.ListItem(foldername + ' Audio', iconImage='icon.png')
+			xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li)
+			xbmcplugin.endOfDirectory(addon_handle)
+
+
+
+# LIVESTREAM BITRATE 256kbit/s
+if SETTINGS.getSetting('livestreambitrate') == '256':
+    if mode is None:
+    	liveurl = 'http://stream.lohro.de:8000/lohro_opus.ogg.m3u'
+    	li = xbmcgui.ListItem('Livestream (256kbit/s, OGG Opus)', thumbnailImage=ICON_LOHRO)
+    	xbmcplugin.addDirectoryItem(handle=addon_handle, url=liveurl, listitem=li)
+
+    	url = build_url({'mode': 'folder', 'foldername': 'Sendungen'})
+    	li = xbmcgui.ListItem('Sendungen', thumbnailImage=ICON_BLANK)
+    	xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li, isFolder=True)
+
+    	url = build_url({'mode': 'folder', 'foldername': 'Neuste Beiträge'})
+    	li = xbmcgui.ListItem('Neuste Beiträge', thumbnailImage=ICON_BLANK)
+    	xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li, isFolder=True)
+
+    	xbmcplugin.endOfDirectory(addon_handle)
+
+	# elif nicht verschachtelt verwenden, None ausschließen:
+	if mode is not None:
+		foldername = args['foldername'][0]
+		url = 'http://localhost/some_video.mkv'
+		li = xbmcgui.ListItem(foldername + ' Audio', iconImage='icon.png')
+		xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li)
+		xbmcplugin.endOfDirectory(addon_handle)
+
