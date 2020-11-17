@@ -1,8 +1,8 @@
-## LOHRO Kodi Addon
+# LOHRO Kodi Addon
 
 Kodi Addon für LOHRO geschrieben in Python2!! Dieses Plugin wird nicht mit Kodi 19 funktionieren!
 
-# To-Do
+## To-Do
 **Addon selbst**
 - [X] Menu funktioniert
 - [X] Livestream-Bitrate kann eingestellt werden
